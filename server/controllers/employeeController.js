@@ -2,6 +2,9 @@
 const User = require("../models/User");
 const Employee = require("../models/Employee");
 
+const fs = require("fs");
+const path = require("path");
+
 const populateEmp = (q) => q.populate("user", "name email role").populate("manager", "name email");
 
 // HR: create user account + employee record
@@ -137,6 +140,43 @@ exports.getTeam = async (req, res) => {
 exports.getManagers = async (req, res) => {
   try {
     res.json(await User.find({ role: "manager" }).select("name email"));
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
+// Any logged-in user: upload own profile photo
+exports.uploadMyPhoto = async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: "Please choose an image" });
+
+    const employee = await Employee.findOne({ user: req.user._id });
+    if (!employee) {
+      if (req.file.path) fs.unlink(req.file.path, () => {});
+      return res.status(404).json({ message: "Profile not found" });
+    }
+
+    let photo;
+    if (process.env.CLOUDINARY_URL) {
+      const cloudinary = require("cloudinary").v2; // reads CLOUDINARY_URL automatically
+      photo = await new Promise((resolve, reject) =>
+        cloudinary.uploader
+          .upload_stream({ folder: "staffsync" }, (err, result) => (err ? reject(err) : resolve(result.secure_url)))
+          .end(req.file.buffer)
+      );
+    } else {
+      photo = req.file.filename;
+    }
+
+    // delete the previous photo only if it was a local file
+    if (employee.photo && !employee.photo.startsWith("http")) {
+      fs.unlink(path.join(__dirname, "..", "uploads", employee.photo), () => {});
+    }
+    employee.photo = photo;
+    await employee.save();
+
+    res.json(await populateEmp(Employee.findById(employee._id)));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

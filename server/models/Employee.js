@@ -10,6 +10,7 @@ const employeeSchema = new mongoose.Schema(
     phone: { type: String, trim: true },
     address: { type: String, trim: true },
     joiningDate: { type: Date, default: Date.now },
+    photo: { type: String },
   },
   { timestamps: true }
 );

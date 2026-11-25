@@ -1,52 +1,44 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
-import HRDashboard from "./pages/dashboards/HRDashboard";
-import ManagerDashboard from "./pages/dashboards/ManagerDashboard";
-import EmployeeDashboard from "./pages/dashboards/EmployeeDashboard";
-import ManageEmployees from "./pages/ManageEmployees";
-import EmployeeProfile from "./pages/EmployeeProfile";
-import Attendance from "./pages/Attendance";
-import LeaveManagement from "./pages/LeaveManagement";
+
+const Login = lazy(() => import("./pages/Login"));
+const HRDashboard = lazy(() => import("./pages/dashboards/HRDashboard"));
+const ManagerDashboard = lazy(() => import("./pages/dashboards/ManagerDashboard"));
+const EmployeeDashboard = lazy(() => import("./pages/dashboards/EmployeeDashboard"));
+const ManageEmployees = lazy(() => import("./pages/ManageEmployees"));
+const EmployeeProfile = lazy(() => import("./pages/EmployeeProfile"));
+const Attendance = lazy(() => import("./pages/Attendance"));
+const LeaveManagement = lazy(() => import("./pages/LeaveManagement"));
+const Announcements = lazy(() => import("./pages/Announcements"));
+const Trainings = lazy(() => import("./pages/Trainings"));
+
+const Loading = () => (
+  <div className="d-flex justify-content-center mt-5">
+    <div className="spinner-border" role="status" />
+  </div>
+);
+
+const guard = (el, roles) => <ProtectedRoute roles={roles}>{el}</ProtectedRoute>;
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/login" />} />
-      <Route path="/login" element={<Login />} />
-      <Route
-        path="/hr-dashboard"
-        element={<ProtectedRoute roles={["hr"]}><HRDashboard /></ProtectedRoute>}
-      />
-      <Route
-        path="/manager-dashboard"
-        element={<ProtectedRoute roles={["manager"]}><ManagerDashboard /></ProtectedRoute>}
-      />
-      <Route
-        path="/employee-dashboard"
-        element={<ProtectedRoute roles={["employee"]}><EmployeeDashboard /></ProtectedRoute>}
-      />
-
-      <Route
-        path="/employees"
-        element={<ProtectedRoute roles={["hr"]}><ManageEmployees /></ProtectedRoute>}
-      />
-      <Route
-        path="/profile"
-        element={<ProtectedRoute><EmployeeProfile /></ProtectedRoute>}
-      />
-
-      <Route
-        path="/attendance"
-        element={<ProtectedRoute><Attendance /></ProtectedRoute>}
-      />
-
-      <Route
-        path="/leaves"
-        element={<ProtectedRoute><LeaveManagement /></ProtectedRoute>}
-      />
-
-    </Routes>
+    <Suspense fallback={<Loading />}>
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/hr-dashboard" element={guard(<HRDashboard />, ["hr"])} />
+        <Route path="/manager-dashboard" element={guard(<ManagerDashboard />, ["manager"])} />
+        <Route path="/employee-dashboard" element={guard(<EmployeeDashboard />, ["employee"])} />
+        <Route path="/employees" element={guard(<ManageEmployees />, ["hr"])} />
+        <Route path="/profile" element={guard(<EmployeeProfile />)} />
+        <Route path="/attendance" element={guard(<Attendance />)} />
+        <Route path="/leaves" element={guard(<LeaveManagement />)} />
+        <Route path="/announcements" element={guard(<Announcements />)} />
+        <Route path="/trainings" element={guard(<Trainings />)} />
+        <Route path="*" element={<Navigate to="/login" />} />
+      </Routes>
+    </Suspense>
   );
 }
 
