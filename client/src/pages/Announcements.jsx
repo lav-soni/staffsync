@@ -31,11 +31,11 @@ export default function Announcements() {
     try {
       await API.post("/announcements", form);
       setForm({ title: "", body: "" });
-      setMessage("Announcement posted");
+      setMessage("Announcement posted successfully");
       setPage(1);
       setTick((t) => t + 1);
     } catch (err) {
-      setError(err.response?.data?.message || "Could not post");
+      setError(err.response?.data?.message || "Could not post announcement");
     }
   };
 
@@ -59,64 +59,123 @@ export default function Announcements() {
   return (
     <>
       <Navbar />
-      <div className="container mt-4" style={{ maxWidth: 800 }}>
-        <h3>Announcements</h3>
-        {message && <div className="alert alert-success">{message}</div>}
-        {error && <div className="alert alert-danger">{error}</div>}
+      <main className="container-xl py-4 px-3 px-md-4" style={{ maxWidth: 960 }}>
+        <div className="mb-4">
+          <h2 className="page-title mb-1">
+            Company Announcements
+          </h2>
+          <div className="subtitle-glass"></div>
+        </div>
+
+        {message && <div className="alert alert-success mb-4">{message}</div>}
+        {error && <div className="alert alert-danger mb-4">{error}</div>}
 
         {canPost && (
-          <form className="card p-3 mb-4" onSubmit={handlePost}>
-            <h5>Post an announcement</h5>
-            <input
-              className="form-control mb-2"
-              placeholder="Title"
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              required
-            />
-            <textarea
-              className="form-control mb-2"
-              rows="3"
-              placeholder="Message"
-              value={form.body}
-              onChange={(e) => setForm({ ...form, body: e.target.value })}
-              required
-            />
+          <form className="card p-4 p-md-5 mb-5 glow-card-indigo" onSubmit={handlePost}>
+            <div className="d-flex align-items-center gap-2 mb-3">
+              <span className="badge bg-primary"></span>
+              <h4 className="mb-0 fw-bold">Publish New Announcement</h4>
+            </div>
+
+            <div className="mb-3">
+              <label className="form-label small text-muted">Title</label>
+              <input
+                className="form-control"
+                placeholder="e.g. Company Townhall & Product Roadmap Update"
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="form-label small text-muted">Message Content</label>
+              <textarea
+                className="form-control"
+                rows="4"
+                placeholder="Compose your update message..."
+                value={form.body}
+                onChange={(e) => setForm({ ...form, body: e.target.value })}
+                required
+              />
+            </div>
+
             <div>
-              <button className="btn btn-primary">Post</button>
+              <button className="btn btn-primary px-4 py-2" type="submit">
+                Publish Announcement
+              </button>
             </div>
           </form>
         )}
 
-        {items.map((a) => (
-          <div key={a._id} className="card mb-3">
-            <div className="card-body">
-              <div className="d-flex justify-content-between">
-                <h5 className="card-title">{a.title}</h5>
-                {canDelete(a) && (
-                  <button className="btn btn-sm btn-outline-danger" onClick={() => handleDelete(a._id)}>
-                    Delete
-                  </button>
-                )}
-              </div>
-              <p className="card-text" style={{ whiteSpace: "pre-wrap" }}>{a.body}</p>
-              <small className="text-muted">
-                Posted by {a.postedBy?.name || "Unknown"} ({a.postedBy?.role || "-"}) on{" "}
-                {new Date(a.createdAt).toLocaleString()}
-              </small>
-            </div>
-          </div>
-        ))}
-        {items.length === 0 && <p className="text-center text-muted">No announcements yet</p>}
+        <div className="d-flex flex-column gap-4">
+          {items.map((a) => (
+            <div key={a._id} className="card glow-card-secondary">
+              <div className="card-body p-4 p-md-5">
+                <div className="d-flex justify-content-between align-items-start mb-2">
+                  <h4 className="fw-bold mb-0">{a.title}</h4>
+                  {canDelete(a) && (
+                    <button
+                      className="btn btn-sm btn-outline-danger"
+                      onClick={() => handleDelete(a._id)}
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
 
-        <div className="d-flex justify-content-center align-items-center gap-3 mb-4">
-          <button className="btn btn-outline-primary btn-sm" disabled={page <= 1}
-            onClick={() => setPage(page - 1)}>Prev</button>
-          <span>Page {page} of {pages}</span>
-          <button className="btn btn-outline-primary btn-sm" disabled={page >= pages}
-            onClick={() => setPage(page + 1)}>Next</button>
+                <p className="card-text text-secondary my-3" style={{ whiteSpace: "pre-wrap", lineHeight: "1.7", fontSize: "1rem" }}>
+                  {a.body}
+                </p>
+
+                <div className="d-flex align-items-center justify-content-between pt-3 border-top border-light border-opacity-10 mt-3">
+                  <div className="d-flex align-items-center gap-2">
+                    <span className="user-role-dot role-dot-hr" />
+                    <span className="small fw-semibold">{a.postedBy?.name || "Administration"}</span>
+                    <span className="badge bg-secondary text-uppercase" style={{ fontSize: "0.65rem" }}>
+                      {a.postedBy?.role || "StaffSync"}
+                    </span>
+                  </div>
+                  <span className="text-muted small">
+                    {new Date(a.createdAt).toLocaleString(undefined, {
+                      dateStyle: "medium",
+                      timeStyle: "short"
+                    })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {items.length === 0 && (
+            <div className="card p-5 text-center text-muted">
+              <span>No announcements posted yet</span>
+            </div>
+          )}
         </div>
-      </div>
+
+        {pages > 1 && (
+          <div className="d-flex justify-content-center align-items-center gap-3 mt-5">
+            <button
+              className="btn btn-outline-light btn-sm"
+              disabled={page <= 1}
+              onClick={() => setPage(page - 1)}
+            >
+              Previous
+            </button>
+            <span className="badge bg-secondary px-3 py-2">
+              Page {page} of {pages}
+            </span>
+            <button
+              className="btn btn-outline-light btn-sm"
+              disabled={page >= pages}
+              onClick={() => setPage(page + 1)}
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </main>
     </>
   );
 }

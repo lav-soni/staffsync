@@ -3,9 +3,8 @@ import { useSelector } from "react-redux";
 import API from "../api/axios";
 import Navbar from "../components/Navbar";
 
-
 const today = () => new Date().toLocaleDateString("en-CA");
-const time = (d) => (d ? new Date(d).toLocaleTimeString() : "-");
+const time = (d) => (d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : "-");
 
 export default function Attendance() {
   const { user } = useSelector((state) => state.auth);
@@ -41,10 +40,10 @@ export default function Attendance() {
     setError("");
     try {
       await API.post(`/attendance/${type}`);
-      setMessage(type === "check-in" ? "Checked in" : "Checked out");
+      setMessage(type === "check-in" ? "Check-in logged successfully." : "Check-out logged successfully.");
       setTick((t) => t + 1);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed");
+      setError(err.response?.data?.message || "Action failed");
     }
   };
 
@@ -53,91 +52,187 @@ export default function Attendance() {
   return (
     <>
       <Navbar />
-      <div className="container mt-4">
-        <h3>Attendance</h3>
-        {message && <div className="alert alert-success">{message}</div>}
-        {error && <div className="alert alert-danger">{error}</div>}
+      <main className="container-xl py-4 px-3 px-md-4">
+        <div className="mb-4">
+          <h2 className="page-title mb-1">
+            Attendance Records
+          </h2>
+          <div className="subtitle-glass"></div>
+        </div>
 
-        <div className="card p-3 mb-4">
-          <h5>Today ({today()})</h5>
-          <p className="mb-2">
-            Check-in: {time(todayRecord?.checkIn)} &nbsp;|&nbsp; Check-out: {time(todayRecord?.checkOut)}
-          </p>
-          <div>
-            <button className="btn btn-success me-2" onClick={() => mark("check-in")}
-              disabled={!!todayRecord}>Check In</button>
-            <button className="btn btn-warning" onClick={() => mark("check-out")}
-              disabled={!todayRecord || !!todayRecord.checkOut}>Check Out</button>
+        {message && <div className="alert alert-success mb-4">{message}</div>}
+        {error && <div className="alert alert-danger mb-4">{error}</div>}
+
+        {/* Action Punch Card */}
+        <div className="card p-4 p-md-5 mb-5 glow-card-indigo">
+          <div className="d-flex justify-content-between align-items-center flex-wrap gap-4">
+            <div>
+              <div className="d-flex align-items-center gap-2 mb-2">
+                <span className="badge bg-primary">Daily Status</span>
+                <span className="text-muted small">Date: {today()}</span>
+              </div>
+              <h4 className="fw-bold mb-2">Today's Punch Status</h4>
+              <p className="text-muted mb-0" style={{ fontSize: "0.95rem" }}>
+                Check-in: <strong className="text-info">{time(todayRecord?.checkIn)}</strong> &nbsp;|&nbsp; Check-out: <strong className="text-warning">{time(todayRecord?.checkOut)}</strong>
+              </p>
+            </div>
+
+            <div className="d-flex gap-3">
+              <button
+                className="btn btn-success px-4 py-2"
+                onClick={() => mark("check-in")}
+                disabled={!!todayRecord}
+              >
+                Check In
+              </button>
+              <button
+                className="btn btn-warning px-4 py-2"
+                onClick={() => mark("check-out")}
+                disabled={!todayRecord || !!todayRecord.checkOut}
+              >
+                Check Out
+              </button>
+            </div>
           </div>
         </div>
 
-        <h5>My Records</h5>
-        <div className="table-responsive mb-4">
-          <table className="table table-striped">
-            <thead><tr><th>Date</th><th>Check In</th><th>Check Out</th><th>Status</th></tr></thead>
-            <tbody>
-              {records.map((r) => (
-                <tr key={r._id}>
-                  <td>{r.date}</td><td>{time(r.checkIn)}</td><td>{time(r.checkOut)}</td><td>{r.status}</td>
-                </tr>
-              ))}
-              {records.length === 0 && <tr><td colSpan="4" className="text-center">No records yet</td></tr>}
-            </tbody>
-          </table>
-        </div>
-
-        {(isHR || isManager) && (
-          <>
-            <div className="d-flex align-items-center gap-3 mb-2">
-              <h5 className="mb-0">{isHR ? "All Employees" : "My Team"}</h5>
-              <input type="date" className="form-control w-auto" value={date}
-                onChange={(e) => setDate(e.target.value)} />
+        <div className="d-flex flex-column gap-5">
+          {/* My Records Card */}
+          <div className="card glow-card-cyan">
+            <div className="card-header d-flex justify-content-between align-items-center py-3 px-4">
+              <strong>My Attendance History</strong>
+              <span className="badge bg-info">{records.length} Records</span>
             </div>
-            <div className="table-responsive mb-4">
-              <table className="table table-striped">
+            <div className="table-responsive p-2">
+              <table className="table mb-0">
                 <thead>
-                  <tr><th>Name</th><th>Department</th><th>Status</th><th>Check In</th><th>Check Out</th></tr>
+                  <tr>
+                    <th>Date</th>
+                    <th>Check In</th>
+                    <th>Check Out</th>
+                    <th>Status</th>
+                  </tr>
                 </thead>
                 <tbody>
-                  {daily.map((e) => (
-                    <tr key={e._id}>
-                      <td>{e.name}</td>
-                      <td>{e.department}</td>
-                      <td>
-                        <span className={`badge ${e.record ? "bg-success" : "bg-danger"}`}>
-                          {e.record ? "Present" : "Absent"}
+                  {records.map((r) => (
+                    <tr key={r._id}>
+                      <td className="fw-medium py-3">{r.date}</td>
+                      <td className="py-3">{time(r.checkIn)}</td>
+                      <td className="py-3">{time(r.checkOut)}</td>
+                      <td className="py-3">
+                        <span className={`badge ${r.status === "present" ? "bg-success" : "bg-warning"}`}>
+                          {r.status}
                         </span>
                       </td>
-                      <td>{time(e.record?.checkIn)}</td>
-                      <td>{time(e.record?.checkOut)}</td>
                     </tr>
                   ))}
-                  {daily.length === 0 && <tr><td colSpan="5" className="text-center">No employees found</td></tr>}
+                  {records.length === 0 && (
+                    <tr>
+                      <td colSpan="4" className="text-center text-muted py-4">No records logged yet</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
-          </>
-        )}
+          </div>
 
-        {isHR && (
-          <>
-            <div className="d-flex align-items-center gap-3 mb-2">
-              <h5 className="mb-0">Monthly Report</h5>
-              <input type="month" className="form-control w-auto" value={month}
-                onChange={(e) => setMonth(e.target.value)} />
+          {/* HR / Manager Daily Team Attendance */}
+          {(isHR || isManager) && (
+            <div className="card glow-card-purple">
+              <div className="card-header d-flex justify-content-between align-items-center flex-wrap gap-2 py-3 px-4">
+                <strong>{isHR ? "Workforce Daily Presence" : "Team Daily Presence"}</strong>
+                <div className="d-flex align-items-center gap-2">
+                  <span className="text-muted small">Date:</span>
+                  <input
+                    type="date"
+                    className="form-control form-control-sm w-auto"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="table-responsive p-2">
+                <table className="table mb-0">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Department</th>
+                      <th>Status</th>
+                      <th>Check In</th>
+                      <th>Check Out</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {daily.map((e) => (
+                      <tr key={e._id}>
+                        <td className="fw-medium py-3">{e.name}</td>
+                        <td className="py-3">{e.department}</td>
+                        <td className="py-3">
+                          <span className={`badge ${e.record ? "bg-success" : "bg-danger"}`}>
+                            {e.record ? "Present" : "Absent"}
+                          </span>
+                        </td>
+                        <td className="py-3">{time(e.record?.checkIn)}</td>
+                        <td className="py-3">{time(e.record?.checkOut)}</td>
+                      </tr>
+                    ))}
+                    {daily.length === 0 && (
+                      <tr>
+                        <td colSpan="5" className="text-center text-muted py-4">No employees recorded for this date</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <table className="table table-striped">
-              <thead><tr><th>Name</th><th>Email</th><th>Days Present</th></tr></thead>
-              <tbody>
-                {report.map((r) => (
-                  <tr key={r.email}><td>{r.name}</td><td>{r.email}</td><td>{r.daysPresent}</td></tr>
-                ))}
-                {report.length === 0 && <tr><td colSpan="3" className="text-center">No data for this month</td></tr>}
-              </tbody>
-            </table>
-          </>
-        )}
-      </div>
+          )}
+
+          {/* HR Monthly Report */}
+          {isHR && (
+            <div className="card glow-card-indigo">
+              <div className="card-header d-flex justify-content-between align-items-center flex-wrap gap-2 py-3 px-4">
+                <strong>Monthly Attendance Summary</strong>
+                <div className="d-flex align-items-center gap-2">
+                  <span className="text-muted small">Month:</span>
+                  <input
+                    type="month"
+                    className="form-control form-control-sm w-auto"
+                    value={month}
+                    onChange={(e) => setMonth(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="table-responsive p-2">
+                <table className="table mb-0">
+                  <thead>
+                    <tr>
+                      <th>Employee Name</th>
+                      <th>Email Address</th>
+                      <th className="text-end">Days Present</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.map((r) => (
+                      <tr key={r.email}>
+                        <td className="fw-medium py-3">{r.name}</td>
+                        <td className="text-muted py-3">{r.email}</td>
+                        <td className="text-end py-3">
+                          <span className="badge bg-success">{r.daysPresent} days</span>
+                        </td>
+                      </tr>
+                    ))}
+                    {report.length === 0 && (
+                      <tr>
+                        <td colSpan="3" className="text-center text-muted py-4">No report data for this month</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
     </>
   );
 }

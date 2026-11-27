@@ -1,6 +1,9 @@
 // Authentication controller
 const User = require("../models/User");
 const generateToken = require("../utils/generateToken");
+const Employee = require("../models/Employee");
+
+
 
 exports.register = async (req, res) => {
     try {
@@ -20,6 +23,13 @@ exports.register = async (req, res) => {
             role: user.role,
             token: generateToken(user._id, user.role)
         });
+
+        await Employee.create({
+        user: user._id,
+        department: req.body.department || "Unassigned",
+        designation: req.body.designation,
+        });
+
     } catch (err) {
         res.status(500).json({ message: err.message});
     }
@@ -45,3 +55,5 @@ exports.login = async (req, res) => {
         res.status(500).json({ message: err.message});
     }
 };
+
+

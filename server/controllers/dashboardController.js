@@ -71,8 +71,36 @@ exports.getDashboard = async (req, res) => {
     }
 
     // ---------- HR ----------
-    const employees = await Employee.find().select("user");
-    const ids = employees.map((e) => e.user);
+    const profiles = await Employee.find()
+      .populate("user", "name email role")
+      .sort({ createdAt: 1 });
+    const linkedIds = profiles.map((p) => p.user?._id).filter(Boolean);
+    // Managers created as accounts only still belong in the workforce overview.
+    const orphanManagers = await User.find({ role: "manager", _id: { $nin: linkedIds } }).select("name email role");
+    const ids = [...linkedIds, ...orphanManagers.map((u) => u._id)];
+
+    const roleRank = { manager: 0, hr: 1, employee: 2 };
+    const workforce = [
+      ...profiles.map((p) => ({
+        _id: p._id,
+        name: p.user?.name || "Team member",
+        email: p.user?.email || "",
+        role: p.user?.role || "employee",
+        department: p.department || "",
+        designation: p.designation || "",
+      })),
+      ...orphanManagers.map((u) => ({
+        _id: u._id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        department: "",
+        designation: "",
+      })),
+    ].sort(
+      (a, b) =>
+        (roleRank[a.role] ?? 3) - (roleRank[b.role] ?? 3) || a.name.localeCompare(b.name)
+    );
 
     const [presentToday, pendingLeaves, onLeaveToday, trainingCount, announcementCount, departments, roles] =
       await Promise.all([
@@ -89,13 +117,117 @@ exports.getDashboard = async (req, res) => {
       ...base,
       totalEmployees: ids.length,
       presentToday,
-      notCheckedIn: ids.length - presentToday,
+      notCheckedIn: Math.max(ids.length - presentToday, 0),
       onLeaveToday,
       pendingLeaves,
       trainingCount,
       announcementCount,
       departments,
       roles,
+      workforce,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
+const weekdays = (year, month, lastDay) => {
+  let count = 0;
+  for (let d = 1; d <= lastDay; d++) {
+    const day = new Date(Date.UTC(year, month - 1, d)).getUTCDay();
+    if (day !== 0 && day !== 6) count++;
+  }
+  return count;
+};
+
+exports.getReport = async (req, res) => {
+  try {
+    const today = todayStr();
+    const month = req.query.month || today.slice(0, 7);
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))
+      return res.status(400).json({ message: "Month must look like 2026-11" });
+
+    const [year, mon] = month.split("-").map(Number);
+    const daysInMonth = new Date(Date.UTC(year, mon, 0)).getUTCDate();
+    const monthStart = new Date(Date.UTC(year, mon - 1, 1));
+    const monthEnd = new Date(Date.UTC(year, mon - 1, daysInMonth));
+
+    // working days so far: full month if past, up to today if current, none if future
+    let lastDay = daysInMonth;
+    if (month === today.slice(0, 7)) lastDay = Number(today.slice(8, 10));
+    else if (month > today.slice(0, 7)) lastDay = 0;
+    const workingDays = weekdays(year, mon, lastDay);
+
+    // HR: everyone, Manager: own team
+    const filter = req.user.role === "manager" ? { manager: req.user._id } : {};
+    const employees = await Employee.find(filter).populate("user", "name email");
+    const ids = employees.map((e) => e.user._id);
+
+    const [attendance, leaves, trainings, pendingLeaves] = await Promise.all([
+      Attendance.aggregate([
+        { $match: { user: { $in: ids }, date: { $regex: `^${month}` } } },
+        { $group: { _id: "$user", days: { $sum: 1 } } },
+      ]),
+      Leave.find({
+        employee: { $in: ids }, status: "approved",
+        startDate: { $lte: monthEnd }, endDate: { $gte: monthStart },
+      }).lean(),
+      Training.find({ "participants.user": { $in: ids } }).lean(),
+      Leave.countDocuments({ employee: { $in: ids }, status: "pending" }),
+    ]);
+
+    const present = Object.fromEntries(attendance.map((a) => [String(a._id), a.days]));
+
+    const leaveDays = {};
+    leaves.forEach((l) => {
+      const from = Math.max(new Date(l.startDate), monthStart);
+      const to = Math.min(new Date(l.endDate), monthEnd);
+      leaveDays[String(l.employee)] = (leaveDays[String(l.employee)] || 0) + Math.round((to - from) / 86400000) + 1;
+    });
+
+    const tr = {};
+    trainings.forEach((t) =>
+      t.participants.forEach((p) => {
+        const key = String(p.user);
+        if (!ids.some((id) => String(id) === key)) return;
+        tr[key] = tr[key] || { assigned: 0, completed: 0 };
+        tr[key].assigned++;
+        if (p.status === "completed") tr[key].completed++;
+      })
+    );
+
+    const rows = employees
+      .map((e) => {
+        const key = String(e.user._id);
+        const daysPresent = present[key] || 0;
+        return {
+          name: e.user.name,
+          email: e.user.email,
+          department: e.department,
+          daysPresent,
+          attendancePct: workingDays ? Math.min(100, Math.round((daysPresent / workingDays) * 100)) : 0,
+          leaveDays: leaveDays[key] || 0,
+          trainingsAssigned: tr[key]?.assigned || 0,
+          trainingsCompleted: tr[key]?.completed || 0,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const sum = (k) => rows.reduce((s, r) => s + r[k], 0);
+    res.json({
+      month,
+      workingDays,
+      summary: {
+        employees: rows.length,
+        avgAttendance: rows.length ? Math.round(sum("attendancePct") / rows.length) : 0,
+        totalLeaveDays: sum("leaveDays"),
+        pendingLeaves,
+        trainingCompletion: sum("trainingsAssigned")
+          ? Math.round((sum("trainingsCompleted") / sum("trainingsAssigned")) * 100)
+          : 0,
+      },
+      rows,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
